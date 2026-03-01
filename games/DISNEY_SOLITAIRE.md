@@ -3,7 +3,7 @@
 **App name:** (check App Store — likely "Solitaire Grand Harvest" by Supertreat)
 **Game type:** Golf Solitaire with a farming/harvest theme
 **First observed:** 2026-03-01
-**Sessions played:** 1
+**Sessions played:** 2
 
 ---
 
@@ -63,6 +63,16 @@ Row 3 (most accessible, bottom):      ~y=60%  — 3 accessible cards + face-down
 - **Face-down cards** become face-up when the card blocking them (below/in front) is removed
 - Row 1 cards (top) are most blocked — only accessible late in the level
 
+### Fan Layout (observed Level 32+)
+
+Some levels use a **fan layout** instead of a standard pyramid:
+- Cards are arranged in a fan/arc — only the **outer tip cards** on each arm of the fan are accessible
+- Inner cards unlock **progressively** as outer ones are cleared (like peeling an onion from outside in)
+- **Gold ✚ cards** appear as special cards in middle positions (e.g., 10♦, K♦) — clearing the outer tips eventually unlocks them
+- Example (Level 32): gold ✚ 6♥ was the outer tip on the left — playing it revealed A♠ + 5♠ behind it
+
+**Fan layout strategy:** identify the two outer tip cards first (one per arm). Play whichever connects to current card. Each outer tip removal unlocks the next card inward.
+
 ### Bottom UI (always visible)
 
 - **Draw pile** (face-down stack): bottom-left ~(0.37, 0.83) ← tap to draw
@@ -120,9 +130,15 @@ From live testing (2026-03-01):
 - If draw pile is exhausted and no plays remain, the level ends — tap the result button
 
 ### Coin management
-- Levels cost coins to enter (~1,200 for level 31)
+- Levels cost coins to enter (~1,200 for level 31–32)
 - Do NOT proceed if coins are insufficient — report to user
 - Collect all reward screens to replenish coins
+- After END LEVEL → map shows a coin reward banner — always tap COLLECT before retrying
+
+### End of level (draw pile exhausted)
+- When draw pile runs out, "END LEVEL" button appears
+- "+5 cards" option is a **paid** extension — **never tap it**, always tap END LEVEL
+- WILD card: **free to use** from your hand (costs 0 coins); buying more costs 1,600 coins — don't buy
 
 ---
 
