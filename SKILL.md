@@ -9,7 +9,7 @@ description: >
   or card play on an iPhone game. Also use when the user asks to continue a previous game session
   or build on what was learned before. Always load the game-specific knowledge file on startup
   if one exists.
-compatibility: "Requires iphone-mirror MCP (screenshot, tap, ocr, open_app). Optional: filesystem MCP for persistent game knowledge."
+compatibility: "Requires iphone-mirror MCP (screenshot, ocr_screenshot, tap, ocr, open_app). Optional: filesystem MCP for persistent game knowledge."
 ---
 
 # iPhone Game Tester — Autonomous Game Loop Agent
@@ -38,20 +38,35 @@ Before entering the game loop:
 
 ---
 
+## Tools: When to Use screenshot vs ocr_screenshot
+
+| Tool | When to use |
+|---|---|
+| `ocr_screenshot` | **Default for the game loop.** Returns text+positions only — no image sent to Claude. Much lower context/token cost. Use for all routine "where are the cards" checks. |
+| `screenshot` (ocr: false) | When you need to visually inspect the screen to diagnose an unexpected state, confirm a new layout, or debug a tap that isn't registering. |
+| `screenshot` (ocr: true) | When you need both a visual and OCR at the same time (e.g. first turn of a new level to calibrate the layout). Use sparingly. |
+
+**Rule of thumb:** In a normal game loop, `ocr_screenshot` handles 90%+ of turns. Only drop to `screenshot` when stuck or diagnosing.
+
+---
+
 ## The Core Loop
 
 Repeat this until the user says to stop or the session goal is reached:
 
 ```
-1. Screenshot (with ocr: true)
+1. ocr_screenshot  — get text positions (no image to Claude)
 2. Parse the screen — what state am I in?
 3. Decide the best action based on game state + knowledge file
 4. Act (tap, draw, wait)
-5. Screenshot again to confirm the action worked
+5. ocr_screenshot again to confirm the action worked
 6. Update knowledge if anything new was learned
 7. Brief status update to user every 5 actions
 8. Repeat
 ```
+
+If 3 consecutive `ocr_screenshot` results show no change after tapping, take a `screenshot`
+(visual) to diagnose — the card may be blocked, the tap may have missed, or a popup appeared.
 
 **Pacing:** Wait ~1 second between taps to let animations complete. After a level transition
 or reward screen, wait ~2 seconds.
