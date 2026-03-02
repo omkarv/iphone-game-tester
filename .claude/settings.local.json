@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__iphone-mirror__screenshot",
+      "mcp__iphone-mirror__tap",
+      "mcp__iphone-mirror__ocr_screenshot"
+    ]
+  }
+}
