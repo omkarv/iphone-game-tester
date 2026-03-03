@@ -3,7 +3,7 @@
 **App name:** (check App Store — likely "Solitaire Grand Harvest" by Supertreat)
 **Game type:** Golf Solitaire with a farming/harvest theme
 **First observed:** 2026-03-01
-**Sessions played:** 2
+**Sessions played:** 3
 
 ---
 
@@ -71,6 +71,15 @@ Some levels use a **fan layout** instead of a standard pyramid:
 - **Gold ✚ cards** appear as special cards in middle positions (e.g., 10♦, K♦) — clearing the outer tips eventually unlocks them
 - Example (Level 32): gold ✚ 6♥ was the outer tip on the left — playing it revealed A♠ + 5♠ behind it
 
+**Fan layout outer-tip algorithm:**
+```
+1. OCR all visible card positions
+2. Sort by x% — leftmost and rightmost are the accessible outer tips
+3. Play whichever outer tip is ±1 of current card
+4. After each tip removal, re-sort to find new outer tip (next card inward on that arm)
+5. Never reach inward past the revealed card — wait for the tip to be played first
+```
+
 **Fan layout strategy:** identify the two outer tip cards first (one per arm). Play whichever connects to current card. Each outer tip removal unlocks the next card inward.
 
 ### Bottom UI (always visible)
@@ -120,9 +129,19 @@ From live testing (2026-03-01):
 
 ### Card play priority
 1. Play the card that unblocks the most face-down cards (prefer mid-pyramid positions)
-2. If multiple equal options, prefer the card furthest from the draw pile (saves it for later)
-3. Use WILD card to extend a streak, not just to play any card
-4. Avoid drawing unless truly stuck — every draw resets your streak
+2. If multiple equal options, prefer the card with the **deepest pile** behind it (most cards blocked by it)
+3. Face-down / blocked cards cannot be played directly — lower cards must be cleared first to reveal them
+4. Use WILD card to extend a streak, not just to play any card
+5. Avoid drawing unless truly stuck — every draw resets your streak
+
+### Arrow cards
+
+Some cards have an **arrow indicator** that changes their value each turn:
+- **↑ up arrow** — card value increases by 1 every turn (e.g., 5 → 6 → 7 …)
+- **↓ down arrow** — card value decreases by 1 every turn (e.g., 8 → 7 → 6 …)
+
+Factor the current turn's value (not the printed base value) when checking ±1 matches.
+An arrow card approaching your current card's value can become playable in 1-2 turns — plan around it.
 
 ### When stuck
 - Draw from pile at ~(0.38, 0.83)
@@ -130,7 +149,8 @@ From live testing (2026-03-01):
 - If draw pile is exhausted and no plays remain, the level ends — tap the result button
 
 ### Coin management
-- Levels cost coins to enter (~1,200 for level 31–32)
+- Levels cost coins to enter: ~1,200 for levels 31–32, ~1,500 for level 58+
+- Confirmed: coins are deducted when PLAY is tapped (e.g., 5,483 → 3,983 = 1,500 deducted for Level 58)
 - Do NOT proceed if coins are insufficient — report to user
 - Collect all reward screens to replenish coins
 - After END LEVEL → map shows a coin reward banner — always tap COLLECT before retrying
@@ -147,16 +167,27 @@ From live testing (2026-03-01):
 - The coin cost increases with level number — check before auto-playing high levels
 - "NEXT BONUS" on the map screen is a countdown timer, not a button — don't tap it
 - The "LIMITED" badge on the map is a time-limited event — may require special attention
-- Hearts/lives indicator visible at top (7/55 observed) — may limit plays
-- Scene progress (e.g., 0/10) advances as levels are completed in that scene
+- The "21/65" (or similar) counter at the top is a scene progress or collectible counter — not hearts/lives
+- Scene progress (e.g., 0/10) advances as levels are completed; completing a scene (10/10) unlocks the next scene
+- If hearts/lives run out, wait 60 minutes for the coins bonus to respawn/regenerate — report to user and stop playing
+- STREAK BONUS has 5 positions (●●●●● = full bonus); after a full streak it resets to ○●○○○ on the next play (not ○○○○○)
+- WILD card costs 3,000 coins to buy (bottom-right button) — never buy it; only use the one granted for free
+
+---
+
+## Session 3 Observations (Level 58, 2026-03-03)
+
+- Level 58 cost: 1,500 coins (confirmed: 5,483 → 3,983 on PLAY tap)
+- Fan layout confirmed with purple frame / special slot in center
+- STREAK BONUS resets to ○●○○○ (not ○○○○○) after a full 5-play streak
+- The "21/65" style counter at top is a scene collectible/progress counter, not hearts
 
 ---
 
 ## TODO (things to learn in future sessions)
 
 - [ ] Confirm whether Ace wraps (can A→K or only A→2)
-- [ ] What happens when scene is completed (0/10 → 10/10)?
-- [ ] Is there a way to play the Row 1 (top) cards directly, or must lower rows be cleared first?
-- [ ] What does the "7/55" counter at top mean?
-- [ ] What happens when hearts run out?
+- [x] What happens when scene is completed (0/10 → 10/10)? → Unlocks the next scene
+- [x] Is there a way to play the Row 1 (top) cards directly? → No — face-down/blocked cards cannot be played; lower cards must be cleared first to reveal them
+- [x] What happens when hearts/lives run out? → Wait 60 minutes for the coins bonus to respawn/regenerate
 - [ ] Confirm exact coordinates for the level complete / reward screen buttons

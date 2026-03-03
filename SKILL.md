@@ -42,11 +42,11 @@ Before entering the game loop:
 
 | Tool | When to use |
 |---|---|
-| `ocr_screenshot` | **Default for the game loop.** Returns text+positions only — no image sent to Claude. Much lower context/token cost. Use for all routine "where are the cards" checks. |
-| `screenshot` (ocr: false) | When you need to visually inspect the screen to diagnose an unexpected state, confirm a new layout, or debug a tap that isn't registering. |
-| `screenshot` (ocr: true) | When you need both a visual and OCR at the same time (e.g. first turn of a new level to calibrate the layout). Use sparingly. |
+| `ocr_screenshot` | **Always — every turn in the game loop.** Returns text+positions only, no image sent to Claude. Lowest context cost. |
+| `screenshot` (ocr: false) | **Only** when 3 consecutive `ocr_screenshot` results show identical text after a tap (tap genuinely didn't register). Never for "calibration". |
+| `screenshot` (ocr: true) | Manual/diagnostic only — for documenting a newly discovered screen layout into the knowledge file. Never in the standard loop. |
 
-**Rule of thumb:** In a normal game loop, `ocr_screenshot` handles 90%+ of turns. Only drop to `screenshot` when stuck or diagnosing.
+**Rule:** `ocr_screenshot` for everything. `screenshot` only when proven stuck (3+ unchanged OCR results after tapping).
 
 ---
 
@@ -56,17 +56,37 @@ Repeat this until the user says to stop or the session goal is reached:
 
 ```
 1. ocr_screenshot  — get text positions (no image to Claude)
-2. Parse the screen — what state am I in?
-3. Decide the best action based on game state + knowledge file
-4. Act (tap, draw, wait)
-5. ocr_screenshot again to confirm the action worked
+2. Parse to compact STATE — reduce OCR to one line (see Compact State Format below)
+3. Plan 2-3 taps ahead using multi-move lookahead (see Multi-Move Lookahead below)
+4. Execute the planned tap chain
+5. ocr_screenshot once to confirm new state after the chain
 6. Update knowledge if anything new was learned
-7. Brief status update to user every 5 actions
+7. Brief status update to user every 10 actions (or on notable events)
 8. Repeat
 ```
 
-If 3 consecutive `ocr_screenshot` results show no change after tapping, take a `screenshot`
-(visual) to diagnose — the card may be blocked, the tap may have missed, or a popup appeared.
+If 3 consecutive `ocr_screenshot` results show identical text after tapping, take a `screenshot`
+(visual, ocr: false) to diagnose — the card may be blocked, the tap may have missed, or a popup appeared.
+
+### Compact State Format
+
+After each `ocr_screenshot`, immediately reduce the raw OCR to a single compact STATE line:
+```
+STATE: card=7 | accessible=[9♦@(18,47), 6♣@(55,47), 2♦@(73,47)] | streak=4/5 | draw=yes | wild=yes
+```
+Use this compact state for all reasoning. Never quote raw OCR lines in your context — always
+parse to STATE first, then reason from STATE.
+
+### Multi-Move Lookahead
+
+Before tapping, compute the full chain:
+1. Which accessible cards are ±1 of current card? → These are valid plays.
+2. For each valid play, what becomes accessible after it? (based on fan/pyramid structure)
+3. From those newly accessible cards, is there a further valid play?
+4. Pick the chain that goes deepest without drawing.
+
+Execute all taps in the chain, then take one `ocr_screenshot` to confirm the new state.
+This reduces screenshots per level significantly compared to one screenshot per tap.
 
 **Pacing:** Wait ~1 second between taps to let animations complete. After a level transition
 or reward screen, wait ~2 seconds.
@@ -130,7 +150,7 @@ normalized coordinates — precision matters. Being off by more than ~3% may mis
 3. **Check which accessible cards are ±1 of the current card** (e.g., if current is 6, look for 5 or 7)
    - Ace wraps: A can connect to 2 or K depending on the game variant
 4. **If a valid play exists:** tap it at its OCR coordinates
-5. **If multiple valid plays exist:** prefer the one that will unblock the most face-down cards
+5. **If multiple valid plays exist:** prefer the one with the deepest pile behind it (most cards it's blocking); break further ties by most face-down cards unblocked
 6. **If no valid play exists:** tap the draw pile to draw a new card (resets streak bonus)
 7. **If draw pile is empty:** use a WILD card if available (tap bottom-right)
 8. **If no moves remain:** the level is over — wait for the result screen
@@ -180,7 +200,7 @@ See `games/solitaire-grand-harvest.md` for a worked example of this format.
 
 ## Reporting to the User
 
-Every 5 actions, give a compact update:
+Every 10 actions, or immediately on a notable event (streak completed, level ended, coins low), give a compact update:
 ```
 [Update] Completed level 31 → 32. Drew 3 times, built 2 streaks. Coins: 24,100.
 New: confirmed that WILD is always tappable at (0.87, 0.80).
