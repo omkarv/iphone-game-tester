@@ -3,7 +3,7 @@
 **App name:** (check App Store — likely "Solitaire Grand Harvest" by Supertreat)
 **Game type:** Golf Solitaire with a farming/harvest theme
 **First observed:** 2026-03-01
-**Sessions played:** 3
+**Sessions played:** 4
 
 ---
 
@@ -157,8 +157,9 @@ An arrow card approaching your current card's value can become playable in 1-2 t
 
 ### End of level (draw pile exhausted)
 - When draw pile runs out, "END LEVEL" button appears
-- "+5 cards" option is a **paid** extension — **never tap it**, always tap END LEVEL
-- WILD card: **free to use** from your hand (costs 0 coins); buying more costs 1,600 coins — don't buy
+- "+5 cards" option — **cost not confirmed** (may be coins or real money). Until confirmed, treat as paid/never use. If confirmed coins-only: apply the N≥7 rule from SKILL.md.
+- WILD card: **free to use** from your hand (costs 0 coins); buying more costs 3,600 coins — don't buy
+- **WILD timing rule**: use WILD when N ≤ 6 accessible cards remain AND draw pile is exhausted. See SKILL.md "End-of-Pile Decision" for full framework.
 
 ---
 
@@ -171,7 +172,21 @@ An arrow card approaching your current card's value can become playable in 1-2 t
 - Scene progress (e.g., 0/10) advances as levels are completed; completing a scene (10/10) unlocks the next scene
 - If hearts/lives run out, wait 60 minutes for the coins bonus to respawn/regenerate — report to user and stop playing
 - STREAK BONUS has 5 positions (●●●●● = full bonus); after a full streak it resets to ○●○○○ on the next play (not ○○○○○)
-- WILD card costs 3,000 coins to buy (bottom-right button) — never buy it; only use the one granted for free
+- WILD card costs 3,000–3,600 coins to buy (observed both values across sessions) — never buy it; only use the one granted for free
+- **WILD usage rule**: Only use free WILD when ≤2–3 cards remain on the board AND draw pile is exhausted. With 6+ cards remaining, WILD saves only 1 card and rarely changes the outcome.
+- Closing a "Try Again" dialog after a level can trigger auto-collection of a large pending reward (observed: coins jumped 3,983 → 33,733)
+- OCR reliably detects: 2, 3, 4, 5, 6, 7, 8, A. OCR unreliable for: 9, J, Q, K (stylized fonts not recognized). Use visual screenshots to read those values.
+
+---
+
+## Session 4 Observations (Level 58 resumed + new level, 2026-03-04)
+
+- Fan layout outer-tip rule confirmed: **sort accessible cards by x% — leftmost and rightmost are the accessible outer tips**. Tapping inner cards (not outer tips) silently fails.
+- Playing 2♦ (outer right tip) revealed two new cards (4♦, 10♣) behind it — confirmed multi-card reveal after outer tip removal
+- Level fail screen: shows "LEVEL ##" title + green "TRY AGAIN" button + red X close button (top-right of dialog) + cost shown at bottom
+  - "Try Again" for Level 58 costs 1,500 coins (same as entry). Red X at ~(0.74, 0.19) closes dialog without spending coins.
+- New level (5-stack fan layout): cards arranged as 5 vertical fan stacks each with one face-up center card; base card at bottom center. Observed: J♠, J♥, 2♠, 3♠, 6♥ as accessible center cards. **Level became unresponsive after loading** — possible game freeze or invisible intro overlay requiring manual dismiss.
+- Draw pile position may differ between level layouts — confirm by visual inspection each level start
 
 ---
 

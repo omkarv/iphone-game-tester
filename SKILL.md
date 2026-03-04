@@ -9,7 +9,7 @@ description: >
   or card play on an iPhone game. Also use when the user asks to continue a previous game session
   or build on what was learned before. Always load the game-specific knowledge file on startup
   if one exists.
-compatibility: "Requires iphone-mirror MCP (screenshot, ocr_screenshot, tap, ocr, open_app). Optional: filesystem MCP for persistent game knowledge."
+compatibility: "Requires iphone-mirror MCP (screenshot, ocr_screenshot, tap, batch_tap, ocr, open_app). Optional: filesystem MCP for persistent game knowledge."
 ---
 
 # iPhone Game Tester — Autonomous Game Loop Agent
@@ -30,23 +30,28 @@ Before entering the game loop:
    *"Loaded knowledge for [Game Name] — I know X screen states, Y strategies from Z sessions."*
    If no file exists, start one after identifying the game.
 
-2. **Confirm the game is on screen** — take a screenshot. If the game isn't open, ask which
-   app to launch (or use `open_app` if the game name is already in the knowledge file).
+2. **Confirm the game is on screen** — use `ocr_screenshot` to confirm the game is visible.
+   If OCR returns recognisable game text (card values, "LEVEL", "PLAY", coin balance), proceed.
+   Only use `screenshot` (ocr: false) if OCR text is empty or completely unrecognisable.
+   If the game isn't open, ask which app to launch (or use `open_app` if the game name is
+   already in the knowledge file).
 
 3. **State the session goal** — if the user didn't specify one, default to:
    *"Complete as many levels as possible, collect all available rewards."*
 
 ---
 
-## Tools: When to Use screenshot vs ocr_screenshot
+## Tools: When to Use Each
 
 | Tool | When to use |
 |---|---|
 | `ocr_screenshot` | **Always — every turn in the game loop.** Returns text+positions only, no image sent to Claude. Lowest context cost. |
+| `batch_tap` | **Preferred for 2+ taps in sequence.** Single subprocess — ~3× faster than sequential `tap()` calls. Use whenever you know the full tap chain in advance. |
+| `tap` | Single tap only when the next tap depends on the result of this one. |
 | `screenshot` (ocr: false) | **Only** when 3 consecutive `ocr_screenshot` results show identical text after a tap (tap genuinely didn't register). Never for "calibration". |
 | `screenshot` (ocr: true) | Manual/diagnostic only — for documenting a newly discovered screen layout into the knowledge file. Never in the standard loop. |
 
-**Rule:** `ocr_screenshot` for everything. `screenshot` only when proven stuck (3+ unchanged OCR results after tapping).
+**Rule:** `ocr_screenshot` for observation. `batch_tap` for executing planned tap chains. `screenshot` only when proven stuck.
 
 ---
 
@@ -58,7 +63,7 @@ Repeat this until the user says to stop or the session goal is reached:
 1. ocr_screenshot  — get text positions (no image to Claude)
 2. Parse to compact STATE — reduce OCR to one line (see Compact State Format below)
 3. Plan 2-3 taps ahead using multi-move lookahead (see Multi-Move Lookahead below)
-4. Execute the planned tap chain
+4. Execute the planned tap chain with `batch_tap` (or `tap` if only 1 tap)
 5. ocr_screenshot once to confirm new state after the chain
 6. Update knowledge if anything new was learned
 7. Brief status update to user every 10 actions (or on notable events)
@@ -85,14 +90,25 @@ Before tapping, compute the full chain:
 3. From those newly accessible cards, is there a further valid play?
 4. Pick the chain that goes deepest without drawing.
 
-Execute all taps in the chain, then take one `ocr_screenshot` to confirm the new state.
-This reduces screenshots per level significantly compared to one screenshot per tap.
+Execute all taps in the chain with a **single `batch_tap` call**, then take one `ocr_screenshot`
+to confirm the new state. This reduces both screenshots and subprocess overhead significantly.
 
-**Pacing:** Wait ~1 second between taps to let animations complete. After a level transition
-or reward screen, wait ~2 seconds.
+```
+batch_tap([{x:0.25, y:0.50}, {x:0.55, y:0.47}, {x:0.73, y:0.47}], defaultDelayMs=800)
+```
+
+**`defaultDelayMs`:** Set to 800-1000ms between taps to let card animations complete. Use lower
+values (100ms) only for UI button chains (e.g. claim → continue) with no animations.
+
+**Pacing:** After a level transition or reward screen, wait ~2 seconds before the next
+`ocr_screenshot`.
 
 **Stuck detection:** If the same screen appears across 3 consecutive action attempts with no
 change, try a different approach — draw a card, use a WILD, scroll, or ask the user.
+
+> **Context budget:** Target ≤ 8 `ocr_screenshot` calls per level (1 to open, ~5–6 during
+> play, 1 confirm after chain, 1 end-of-level). If you exceed 12 calls on a single level,
+> something is wrong — draw or end the level rather than keep probing.
 
 ---
 
@@ -130,10 +146,10 @@ The board has a **pyramid layout** where cards are stacked in rows:
 - The **draw pile** is to the left of the current card
 - The **WILD card** (if available) is at the bottom right
 
-### Reading the board with OCR
+### Reading the board
 
-After taking a screenshot with `ocr: true`, the OCR returns positions as `(x%, y%)` percentages
-of screen width/height. Use these to locate cards:
+Use `ocr_screenshot` to read the board — it returns positions as `(x%, y%)` percentages
+of screen width/height with no image sent to Claude. Use these to locate cards:
 - Cards at lower y% values are higher on screen (more blocked)
 - Cards at higher y% values are lower on screen (more accessible)
 - The current card is typically at ~y=80-85%
@@ -152,7 +168,7 @@ normalized coordinates — precision matters. Being off by more than ~3% may mis
 4. **If a valid play exists:** tap it at its OCR coordinates
 5. **If multiple valid plays exist:** prefer the one with the deepest pile behind it (most cards it's blocking); break further ties by most face-down cards unblocked
 6. **If no valid play exists:** tap the draw pile to draw a new card (resets streak bonus)
-7. **If draw pile is empty:** use a WILD card if available (tap bottom-right)
+7. **If draw pile is empty:** see End-of-Pile Decision below
 8. **If no moves remain:** the level is over — wait for the result screen
 
 ### Tapping cards precisely
@@ -165,6 +181,47 @@ OCR says "A" at (52, 81)  →  tap at x=0.52, y=0.81
 
 If a tap doesn't register (screen unchanged on next screenshot), try ±0.02 on both axes.
 Log which offset worked in the knowledge file for that game.
+
+### End-of-Pile Decision (WILD vs +5 vs END LEVEL)
+
+When the draw pile is exhausted, you typically see: END LEVEL | +5 cards | (WILD still in hand).
+Use this framework to decide:
+
+**Key variable: N = number of accessible board cards remaining**
+
+#### WILD (free, if available)
+- Guaranteed 1 play: you choose exactly which card to play (optimal selection)
+- Best when N is small — you can see and execute the full chain
+- Expected cards cleared ≈ 1 + chain_length_from_best_choice
+
+#### +5 cards (costs in-game coins or real money)
+Each of the 5 new draws becomes the "current card," giving you a fresh chance to connect.
+
+**P(a single drawn card connects to the board)** depends on how many distinct values are
+accessible. In a 13-value deck:
+- N=2 cards (e.g. 4♦, K♣): ~4 values connect → P(connect) ≈ 31% per draw
+- N=5 cards (diverse values): ~8 values connect → P(connect) ≈ 62% per draw
+- N=10 cards (wide spread): ~12+ values connect → P(connect) ≈ 85%+ per draw
+
+**P(at least 1 of 5 draws connects):**
+- N=2: 1−(0.69)^5 ≈ **84%** but chains are short (1–2 cards) → E[cleared] ≈ 1.0
+- N=5: 1−(0.38)^5 ≈ **99%** and chains are longer → E[cleared] ≈ 3–4
+- N=10: near 100%, multiple draws each trigger chains → E[cleared] ≈ 6–9
+
+#### Decision table
+
+| Board cards (N) | Best option | Reasoning |
+|---|---|---|
+| 1–3 | **WILD** (always) | Guaranteed play; +5 only adds ~1 expected card even if it connects |
+| 4–6 | **WILD** if you see a ≥2-card chain; otherwise END LEVEL | +5 expected ≈ WILD but costs coins |
+| 7–9 | **+5** beats WILD mathematically — IF coins-only cost | Each of 5 draws has ~70%+ connect chance; WILD gives just 1 chain |
+| 10+ | **+5** clearly wins | Near-certain connection per draw × 5 draws × long chains |
+
+#### Practical rule
+- If +5 costs **real money (hard currency)**: **never use it** — always END LEVEL or WILD
+- If +5 costs **in-game coins**: use it when N ≥ 7 and you can afford it without going broke
+- **WILD**: always use before END LEVEL when N ≤ 6 (free and guaranteed)
+- **WILD at N ≥ 7**: only if you can see a chain clearing ≥4 cards; otherwise +5 (if affordable) or END LEVEL
 
 ### Streak bonus
 
